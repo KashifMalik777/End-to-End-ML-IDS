@@ -5,6 +5,7 @@ fonttools==4.59.1
 iniconfig==2.1.0
 joblib==1.4.2
 kiwisolver==1.4.9
+lightgbm==4.4.0
 matplotlib==3.9.0
 numpy==1.26.4
 packaging==25.0
