@@ -1,1 +1,16 @@
-venv/ 
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Virtual Environment
+venv/
+
+# IDE / Editor
+.vscode/
+.idea/
+
+# Data (optional, if data is too large for repo)
+# data/*.csv
+# data/*.parquet
