@@ -3,84 +3,83 @@
 import pandas as pd
 import numpy as np
 import time
+from typing import List
 
-# Set a random seed for reproducibility
-np.random.seed(42)
+# Feature set remains the same
+SELECTED_FEATURES = [
+    'Flow Duration', 'Total Fwd Packets', 'Total Backward Packets',
+    'Total Length of Fwd Packets', 'Total Length of Bwd Packets',
+    'Fwd Packet Length Mean', 'Bwd Packet Length Mean', 'Flow Bytes/s',
+    'Flow IAT Mean', 'Flow IAT Std', 'Flow IAT Max', 'Flow IAT Min',
+    'Fwd IAT Mean', 'Fwd IAT Std', 'Fwd IAT Max', 'Fwd IAT Min',
+    'Bwd IAT Mean', 'Bwd IAT Std', 'Bwd IAT Max', 'Bwd IAT Min',
+    'Min Packet Length', 'Max Packet Length', 'Packet Length Mean',
+    'Packet Length Std', 'Packet Length Variance', 'Average Packet Size',
+    'Avg Fwd Segment Size', 'Avg Bwd Segment Size',
+    'Label'
+]
+
+def clean_data(df: pd.DataFrame) -> pd.DataFrame:
+    """
+    Cleans the CIC-IDS2017 dataframe by stripping column names,
+    handling infinite and NaN values, and removing duplicates.
+    """
+    df.columns = df.columns.str.strip()
+    df.replace([np.inf, -np.inf], np.nan, inplace=True)
+    df.dropna(inplace=True)
+    df.drop_duplicates(inplace=True)
+    return df
+
+def preprocess_data(df: pd.DataFrame) -> pd.DataFrame:
+    """
+    Performs preprocessing and feature engineering on the cleaned dataframe.
+    """
+    df['Label'] = df['Label'].apply(lambda x: 0 if x == 'BENIGN' else 1)
+    existing_features = [col for col in SELECTED_FEATURES if col in df.columns]
+    df = df[existing_features]
+    return df
 
 def main():
     """
-    Main function to run the EDA and cleaning process.
+    Main function to run the full data processing pipeline on multiple files.
     """
     start_time = time.time()
     
-    # Define the path to the data
-    file_path = 'data/monday.csv'
+    input_files = [
+        'data/monday.csv',
+        'data/friday_portscan.csv'
+    ]
+    output_path = 'data/processed_dataset.parquet'
     
-    print("--- Section 1: Initial Data Loading & Inspection ---")
+    print("[INFO] Starting data processing pipeline...")
     
-    # --- Smoke Test: Load a small sample first ---
-    print("\n[INFO] Performing smoke test by loading first 200 rows...")
-    try:
-        sample_df = pd.read_csv(file_path, nrows=200)
-        print("Smoke test successful. Sample data loaded:")
-        print(sample_df.head(3))
-    except Exception as e:
-        print(f"[ERROR] Smoke test failed: {e}")
-        return
+    # --- Load, Combine, Clean, and Preprocess ---
+    df_list = [pd.read_csv(f) for f in input_files]
+    df = pd.concat(df_list, ignore_index=True)
+    print(f"Combined initial shape: {df.shape}")
+    
+    df_clean = clean_data(df.copy())
+    print(f"Shape after cleaning: {df_clean.shape}")
+    
+    df_processed = preprocess_data(df_clean.copy())
+    print(f"Shape after preprocessing: {df_processed.shape}")
+    
+    # --- Verify and Save ---
+    print(f"\n[VERIFY] Final check for NaN values: {df_processed.isnull().sum().sum()}")
+    if 'Flow Bytes/s' in df_processed.columns:
+        # Final check for infinities that can arise from 'Flow Duration' being zero
+        df_processed.replace([np.inf, -np.inf], np.nan, inplace=True)
+        df_processed.dropna(inplace=True)
+        print(f"[VERIFY] Final check for infinite values: {df_processed.isin([np.inf, -np.inf]).sum().sum()}")
+        print(f"Shape after final infinity check: {df_processed.shape}")
 
-    # --- Full Data Load ---
-    print("\n[INFO] Loading the full dataset. This might take a moment...")
-    df = pd.read_csv(file_path)
-    print(f"Full dataset loaded successfully. Shape: {df.shape}")
+    print(f"\nNew label distribution:\n{df_processed['Label'].value_counts(normalize=True)}")
     
-    # --- Initial Inspection ---
-    print(f"Initial memory usage: {df.memory_usage(deep=True).sum() / 1024**2:.2f} MB")
-    print("\n--- Section 2: Data Cleaning ---")
-    
-    # --- 1. Clean Column Names ---
-    # The dataset has leading spaces in column names.
-    original_columns = df.columns.tolist()
-    df.columns = df.columns.str.strip()
-    print("\n[CLEAN] Stripped leading/trailing whitespace from column names.")
-    
-    # --- 2. Handle Infinite Values ---
-    # Replace infinite values with NaN, as they are problematic for many ML algorithms.
-    inf_counts = df.isin([np.inf, -np.inf]).sum().sum()
-    print(f"\n[INFO] Found {inf_counts} infinite values.")
-    df.replace([np.inf, -np.inf], np.nan, inplace=True)
-    print("[CLEAN] Replaced infinite values with NaN.")
-
-    # --- 3. Handle Missing Values (NaN) ---
-    # Now we drop all rows that contain any NaN values (this includes the ones we just converted from inf).
-    nan_counts = df.isnull().sum().sum()
-    print(f"\n[INFO] Found {nan_counts} total NaN values (including converted infinities).")
-    initial_rows = len(df)
-    df.dropna(inplace=True)
-    rows_after_dropna = len(df)
-    print(f"[CLEAN] Dropped {initial_rows - rows_after_dropna} rows containing NaN values.")
-    print(f"Shape after dropping NaNs: {df.shape}")
-
-    # --- 4. Handle Duplicate Rows ---
-    duplicate_counts = df.duplicated().sum()
-    print(f"\n[INFO] Found {duplicate_counts} duplicate rows.")
-    if duplicate_counts > 0:
-        initial_rows = len(df)
-        df.drop_duplicates(inplace=True)
-        rows_after_drop_duplicates = len(df)
-        print(f"[CLEAN] Dropped {initial_rows - rows_after_drop_duplicates} duplicate rows.")
-        print(f"Shape after dropping duplicates: {df.shape}")
-    
-    print("\n--- Section 3: Final Verification ---")
-    final_nan = df.isnull().sum().sum()
-    final_inf = df.isin([np.inf, -np.inf]).sum().sum()
-    print(f"\n[VERIFY] Final check for NaN values: {final_nan}")
-    print(f"[VERIFY] Final check for infinite values: {final_inf}")
-    print(f"[VERIFY] Final dataset shape: {df.shape}")
-    print(f"Final memory usage: {df.memory_usage(deep=True).sum() / 1024**2:.2f} MB")
+    df_processed.to_parquet(output_path)
+    print(f"\n[SUCCESS] Processed data saved to {output_path}")
     
     end_time = time.time()
-    print(f"\nEDA and cleaning completed in {end_time - start_time:.2f} seconds.")
-
+    print(f"\nPipeline completed in {end_time - start_time:.2f} seconds.")
 
 if __name__ == '__main__':
     main()
