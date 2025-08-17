@@ -1,0 +1,15 @@
+# Git
+.git/
+.gitignore
+
+# Python
+__pycache__/
+*.pyc
+venv/
+
+# Docker
+Dockerfile
+.dockerignore
+
+# Data - We don't need the raw data in the production image
+data/
